@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Safetynet Sample</string>
+
+    <string name="safetynet_response_ok">Device certified!</string>
+    <string name="safetynet_response_uncertified">Uncertified device! Check if your bootloader is unlocked or if you\'re using a custom ROM</string>
+    <string name="safetynet_response_root">Rooted device or using emulator!</string>
+    <string name="safetynet_response_error">"Error while checking for SafetyNetResponse: %s</string>
+</resources>
