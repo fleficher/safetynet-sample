@@ -6,15 +6,16 @@ import com.example.safetynet.BuildConfig
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.safetynet.SafetyNet
 import com.google.android.gms.safetynet.SafetyNetApi
+import com.google.android.gms.tasks.Tasks
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import kotlinx.coroutines.runBlocking
 import timber.log.Timber
 import java.security.SecureRandom
 import java.util.*
 
 class SafetyNetHelper(
-    private val context: Context,
-    private val callback: SafetyNetCallback
+    private val context: Context
 ) {
 
     companion object {
@@ -39,30 +40,36 @@ class SafetyNetHelper(
     /**
      * Call the SafetyNet test to check if this device profile/ROM has passed the CTS test
      */
-    fun requestAttestation() {
+    fun requestAttestation() = runBlocking {
         val requestNonce = generateOneTimeRequestNonce()
 
-        SafetyNet.getClient(context).attest(requestNonce, API_KEY)
-            .addOnSuccessListener { it -> onRequestSuccess(it, requestNonce) }
-            .addOnFailureListener { it -> onRequestFail(it) }
+        val task = SafetyNet.getClient(context).attest(requestNonce, API_KEY)
+        try {
+            val result = Tasks.await(task)
+            onRequestSuccess(result, requestNonce)
+        } catch (e: Exception) {
+            onRequestFail(e)
+        }
     }
 
     private fun onRequestSuccess(
         apiResponse: SafetyNetApi.AttestationResponse,
         requestNonce: ByteArray
-    ) {
+    ): SafetyNetResult {
         val jwsResult = apiResponse.jwsResult
-        val response = parseJsonWebSignature(jwsResult) ?: return
+        val response = parseJsonWebSignature(jwsResult) ?: return Error(
+            RESPONSE_VALIDATION_FAILED,
+            "json format incorrect"
+        )
 
-        if (!response.ctsProfileMatch || !response.basicIntegrity) {
-            callback.onSuccess(response.ctsProfileMatch, response.basicIntegrity)
-            return
+        return if (!response.ctsProfileMatch || !response.basicIntegrity) {
+            Success(response.ctsProfileMatch, response.basicIntegrity)
         } else {
             // If ctsProfileMatch & basicIntegrity are true, we need to check if the response hasn't been tampered
             if (validateSafetyNetResponsePayload(requestNonce, response)) {
-                callback.onSuccess(response.ctsProfileMatch, response.basicIntegrity)
+                Success(response.ctsProfileMatch, response.basicIntegrity)
             } else {
-                callback.onError(
+                Error(
                     RESPONSE_VALIDATION_FAILED,
                     "Response payload validation failed"
                 )
@@ -70,14 +77,18 @@ class SafetyNetHelper(
         }
     }
 
-    private fun onRequestFail(exception: Exception) {
-        if (exception is ApiException) {
-            callback.onError(
-                exception.statusCode, "ApiException: ${exception.message}"
+    private fun onRequestFail(exception: Exception): SafetyNetResult {
+        Timber.d(exception)
+        return if (exception is ApiException) {
+            Error(
+                exception.statusCode,
+                "ApiException: ${exception.message}"
             )
         } else {
-            Timber.d(exception)
-            callback.onError(RESPONSE_VALIDATION_FAILED, "Response payload validation failed")
+            Error(
+                RESPONSE_VALIDATION_FAILED,
+                "Response payload validation failed"
+            )
         }
     }
 
