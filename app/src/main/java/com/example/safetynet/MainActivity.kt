@@ -12,12 +12,12 @@ import kotlin.coroutines.CoroutineContext
 
 class MainActivity : AppCompatActivity(), CoroutineScope {
 
+    override val coroutineContext: CoroutineContext
+        get() = Dispatchers.Main + job
+
     private val safetyNetHelper by lazy {
         SafetyNetHelper(applicationContext)
     }
-
-    override val coroutineContext: CoroutineContext
-        get() = Dispatchers.Main + job
 
     private val job = Job()
 

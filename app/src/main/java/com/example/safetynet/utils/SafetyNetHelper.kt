@@ -38,11 +38,10 @@ class SafetyNetHelper(
     }
 
     /**
-     * Call the SafetyNet test to check if this device profile/ROM has passed the CTS test
+     * Call the SafetyNet API to check if this device profile/ROM has passed the CTS test
      */
     fun requestAttestation() = runBlocking {
         val requestNonce = generateOneTimeRequestNonce()
-
         val task = SafetyNet.getClient(context).attest(requestNonce, API_KEY)
         try {
             val result = Tasks.await(task)
